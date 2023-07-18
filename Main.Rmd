@@ -41,10 +41,10 @@ library(forcats)
 
 ```{r depth_interval}
 # upper limit
-du <- 0
+du <- 10
 
 #lower limit
-dl <- 10
+dl <- 30
 ```
 
 
@@ -54,21 +54,22 @@ The variable 'date' specifies the date when the files of the data preparation st
 
 *Note: The name of the OC prediction of the sediment interval above needs to be added manually.*
 
-```{r load data}
+```{r load_data}
 date <- "2023-07-18"
 
-predictors <- terra::rast("input/predictors.tif")
+predictors <- rast("input/predictors.tif")
 
 if(du != 0){
-  OCabove <- raster(paste0("output/OC0-10cm_median_", date, ".tif"))
-  predictors <- stack(predictors[[c("BATH", "Mud")]], OCabove)
+  OCabove <- rast(paste0("output/OC0-10cm_median_", date, ".tif"))
+  predictors <- c(predictors, OCabove)
   names(predictors)[[length(names(predictors))]] <- "OC"
   rm(OCabove)
-} else {
-  OC <- read_sf(paste0("input/OC", du, "_", date, ".shp"))
-}
+} 
 
+OC <- read_sf(paste0("input/OC", du, "_", date, ".shp"))
 OC <- vect(OC)
+
+names(predictors)
 ```
 
 
@@ -320,7 +321,7 @@ Roberts et. al. (2017) suggest that blocks should be substantially bigger than t
 
 ```{r spatial_blocks}
 k <- 10 # Number of folds
-m <- 0.3 # Multiplier applied to block size
+m <- 0.01 # Multiplier applied to block size
 
 spBlocks <- cv_spatial(x = OC_pr,
                        k = k,
