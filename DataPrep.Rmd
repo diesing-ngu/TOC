@@ -1,0 +1,249 @@
+---
+title: "Organic carbon in surface sediments - DataPrep"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Preparations
+
+## Install packages
+
+```{r packages, message=FALSE, warning=FALSE}
+rm(list=ls())
+
+library(sf)
+library(sdmpredictors)
+library(spatialEco)
+library(dplyr)
+library(stars)
+library(terra)
+```
+
+
+## Define projection and resolution
+
+Projection based on https://projectionwizard.org/ using the AoI.
+
+*Is it possible to automate the selection of the CSR based on the AoI?*
+
+```{r projection}
+crs <- "+proj=laea +lat_0=90 +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs" 
+res <- 4000
+```
+
+
+## Define Area of Interest (AoI)
+
+The area of interest is defined by the predicted sediment classes. Rocks and boulders (50) define areas outside the AoI.
+
+*Make sure to load the most up-to-date version of predicted sediment classes*
+
+```{r aoi}
+AoI <- rast("N:/Prosjekter/311700_MAREANO/311778_Automatisert_kartlegging/Kornstørrelse/R/GrainSize/output/GrainSizeReg_folk8_classes_2023-06-28.tif")
+AoI[AoI == 11] <- 1
+AoI[AoI == 12] <- 1
+AoI[AoI == 13] <- 1
+AoI[AoI == 20] <- 1
+AoI[AoI == 30] <- 1
+AoI[AoI == 40] <- 1
+AoI[AoI == 50] <- NA
+AoI[AoI == 60] <- 1
+
+AoI <- as.polygons(AoI, dissolve = TRUE)
+```
+
+
+# Predictor variables
+
+Potentially relevant predictor variables are loaded and a raster stack is created.
+
+```{r load_predictors}
+predictors <- rast("input/predictors_ngb.tif")
+mud <- extend(rast("N:/Prosjekter/311700_MAREANO/311778_Automatisert_kartlegging/Kornstørrelse/R/GSM_model/output/mud_2023-06-30.tif"), predictors)
+predictors <- c(predictors, mud)
+names(predictors)[38] <- "Mud"
+```
+
+
+## Ensure uniform projection
+
+Check if AoI and predictors have the defined projection. Re-project if this is not the case.
+
+```{r uniform_proj}
+if (st_crs(AoI)$proj4string != crs) {
+  AoI <- st_transform(AoI, crs)
+}
+
+if (crs(predictors) != crs) {
+  predictors <- project(predictors, crs, res = res)
+}
+```
+
+
+## Crop predictors to AoI
+
+```{r crop_predictors}
+predictors <- crop(mask(predictors, AoI, touches = FALSE), AoI)
+plot(predictors)
+```
+
+
+## Create a fishnet based on predictor raster
+
+```{r fishnet}
+min_ext <- sum(predictors)
+min_ext[min_ext == 0] <- NA
+fishnet <- st_as_sf(stars::st_as_stars(min_ext), as_points = FALSE, merge = FALSE)
+fishnet$ID <- 1:nrow(fishnet)
+
+#write_sf(fishnet, dsn = "input", layer = "fishnet", driver = "ESRI Shapefile")
+```
+
+
+# Response variable
+
+## Load response (MOSAIC data)
+
+The following fields are required:
+
+core_id, sample_id, latitude, longitude, sample_depth_average_cm, replicate, total_organic_carbon_, total_organic_carbon_._DOI
+
+```{r load_response}
+OC_data <- read.csv("input/mosaic_2023-04-21.csv", header = TRUE, sep = ",")
+summary(OC_data)
+
+OC <- OC_data[,c(1,2,3,4,8,9,10,11)] #Reduce to required columns
+
+names(OC)[7] <- "toc_perc"
+names(OC)[8] <- "doi"
+
+OC <- na.omit(OC) # Removes rows with NAs
+OC <- subset(OC, replicate == 1) # Removes replicates
+
+# Convert to sf
+OC <- st_as_sf(OC, coords = c("longitude", "latitude"), crs = "+proj=longlat +datum=WGS84 +no_defs")
+
+summary(OC)
+```
+
+
+## Ensure uniform projection
+
+Check if the response variable has the defined projection. Re-project if this is not the case.
+
+```{r uniform_proj_oc}
+if (st_crs(OC)$proj4string != crs) {
+  OC <- st_transform(OC, crs)
+}
+```
+
+
+## Sample depth intervals
+
+Define breaks in sample depth to create depth intervals. Note that depth is given in cm and as a positive number here.
+
+It has become an unofficial standard to use the upper 10 cm of the sediment column. However, this was borne out of limited data availability. Our data allows us to go deeper than that, so we use 0 - 10 cm and 10 - 30 cm.
+
+```{r depth_intervals}
+brks <- c(0, 10, 30)
+OC0 <- subset(OC, sample_depth_average_cm >= brks[1] & sample_depth_average_cm < brks[2])
+OC10 <- subset(OC, sample_depth_average_cm >= brks[2] & sample_depth_average_cm < brks[3])
+```
+
+
+Alternatively, standard depth intervals as in terrestrial soil mapping could be used. These are 0 - 5 cm, 5 - 15 cm, 15 - 30 cm, 30 - 60 cm, 60 - 100 cm, and 100 - 200 cm.
+
+```{r depth_intervals_standard}
+#brks <- c(0, 5, 15, 30, 60, 100)
+#OC0 <- subset(OC, sample_depth_average_cm >= brks[1] & sample_depth_average_cm < brks[2])
+#OC5 <- subset(OC, sample_depth_average_cm >= brks[2] & sample_depth_average_cm < brks[3])
+#OC15 <- subset(OC, sample_depth_average_cm >= brks[3] & sample_depth_average_cm < brks[4])
+#OC30 <- subset(OC, sample_depth_average_cm >= brks[4] & sample_depth_average_cm < brks[5])
+#OC60 <- subset(OC, sample_depth_average_cm >= brks[5] & sample_depth_average_cm < brks[6])
+```
+
+
+## Centroids
+
+Centroids are calculated to average all measurements of TOC within one grid cell and the relevant depth interval. Again, this can be executed for 0 - 10 cm and 10 - 30 cm:
+
+```{r centroids_surface}
+OC_centroids <- st_join(fishnet, OC0)
+OC_centroids <- na.omit(OC_centroids)
+OC_centroids <- OC_centroids %>% group_by(ID) %>% summarize(toc_perc = mean(toc_perc, na.rm = TRUE))
+OC0 <- st_centroid(OC_centroids)
+
+OC_centroids <- st_join(fishnet, OC10)
+OC_centroids <- na.omit(OC_centroids)
+OC_centroids <- OC_centroids %>% group_by(ID) %>% summarize(toc_perc = mean(toc_perc, na.rm = TRUE))
+OC10 <- st_centroid(OC_centroids)
+```
+
+... or alternatively for standard depth intervals:
+
+```{r centroids_standard_intervals}
+#OC_centroids <- st_join(fishnet, OC0)
+#OC_centroids <- na.omit(OC_centroids)
+#OC_centroids <- OC_centroids %>% group_by(ID) %>% summarize(toc_perc = mean(toc_perc, na.rm = #TRUE))
+#OC0 <- st_centroid(OC_centroids)
+
+#OC_centroids <- st_join(fishnet, OC5)
+#OC_centroids <- na.omit(OC_centroids)
+#OC_centroids <- OC_centroids %>% group_by(ID) %>% summarize(toc_perc = mean(toc_perc, na.rm = #TRUE))
+#OC5 <- st_centroid(OC_centroids)
+
+#OC_centroids <- st_join(fishnet, OC15)
+#OC_centroids <- na.omit(OC_centroids)
+#OC_centroids <- OC_centroids %>% group_by(ID) %>% summarize(toc_perc = mean(toc_perc, na.rm = #TRUE))
+#OC15 <- st_centroid(OC_centroids)
+
+#OC_centroids <- st_join(fishnet, OC30)
+#OC_centroids <- na.omit(OC_centroids)
+#OC_centroids <- OC_centroids %>% group_by(ID) %>% summarize(toc_perc = mean(toc_perc, na.rm = #TRUE))
+#OC30 <- st_centroid(OC_centroids)
+
+#OC_centroids <- st_join(fishnet, OC60)
+#OC_centroids <- na.omit(OC_centroids)
+#OC_centroids <- OC_centroids %>% group_by(ID) %>% summarize(toc_perc = mean(toc_perc, na.rm = #TRUE))
+#OC60 <- st_centroid(OC_centroids)
+```
+
+
+# Save files for use in main process
+
+```{r save_predictors}
+writeRaster(predictors, "input/predictors.tif", overwrite = TRUE)
+```
+
+
+```{r save_0-30cm}
+write_sf(OC0, dsn = "input", layer = paste0("OC0_", Sys.Date()), driver = "ESRI Shapefile")
+write_sf(OC10, dsn = "input", layer = paste0("OC10_", Sys.Date()), driver = "ESRI Shapefile")
+```
+
+
+```{r save_depth_intervals}
+#write_sf(OC0, dsn = "input", layer = paste0("OC0_", Sys.Date()), driver = "ESRI Shapefile")
+#write_sf(OC5, dsn = "input", layer = paste0("OC5_", Sys.Date()), driver = "ESRI Shapefile")
+#write_sf(OC15, dsn = "input", layer = paste0("OC15_", Sys.Date()), driver = "ESRI Shapefile")
+#write_sf(OC30, dsn = "input", layer = paste0("OC30_", Sys.Date()), driver = "ESRI Shapefile")
+#write_sf(OC60, dsn = "input", layer = paste0("OC60_", Sys.Date()), driver = "ESRI Shapefile")
+```
+
+
+## Save session info
+
+```{r save_session_info}
+sessionInfo <- sessionInfo()
+save(sessionInfo, file = "sessionInfo_DataPrep.Rdata")
+rm("sessionInfo")
+```
+
+
+## Save global environment
+
+```{r save_global_env}
+save.image(file = "globEnv_DataPrep.RData")
+```
+
