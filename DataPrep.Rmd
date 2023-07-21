@@ -62,7 +62,8 @@ Potentially relevant predictor variables are loaded and a raster stack is create
 predictors <- rast("input/predictors_ngb.tif")
 mud <- extend(rast("N:/Prosjekter/311700_MAREANO/311778_Automatisert_kartlegging/Kornstørrelse/R/GSM_model/output/mud_2023-06-30.tif"), predictors)
 predictors <- c(predictors, mud)
-names(predictors)[38] <- "Mud"
+
+names(predictors)[38] <- "Mud_perc"
 ```
 
 
@@ -118,6 +119,7 @@ OC <- OC_data[,c(1,2,3,4,8,9,10,11)] #Reduce to required columns
 names(OC)[7] <- "toc_perc"
 names(OC)[8] <- "doi"
 
+OC <- subset(OC, core_id != 4402) # Removal of a suspicious station
 OC <- na.omit(OC) # Removes rows with NAs
 OC <- subset(OC, replicate == 1) # Removes replicates
 

@@ -41,10 +41,10 @@ library(forcats)
 
 ```{r depth_interval}
 # upper limit
-du <- 10
+du <- 0
 
 #lower limit
-dl <- 30
+dl <- 10
 ```
 
 
@@ -55,7 +55,7 @@ The variable 'date' specifies the date when the files of the data preparation st
 *Note: The name of the OC prediction of the sediment interval above needs to be added manually.*
 
 ```{r load_data}
-date <- "2023-07-18"
+date <- "2023-07-20"
 
 predictors <- rast("input/predictors.tif")
 
@@ -321,7 +321,7 @@ Roberts et. al. (2017) suggest that blocks should be substantially bigger than t
 
 ```{r spatial_blocks}
 k <- 10 # Number of folds
-m <- 0.01 # Multiplier applied to block size
+m <- 0.3 # Multiplier applied to block size
 
 spBlocks <- cv_spatial(x = OC_pr,
                        k = k,
