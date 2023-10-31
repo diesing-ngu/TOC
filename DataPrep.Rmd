@@ -21,6 +21,14 @@ library(terra)
 ```
 
 
+## Download and unzip input data
+
+```{r input_data}
+download.file(url = "https://zenodo.org/records/10058434/files/OrganicCarbonContent_input.zip", destfile = "input/input_data.zip")
+unzip(zipfile = "input/input_data.zip", exdir = "input")
+```
+
+
 ## Define projection and resolution
 
 Projection based on https://projectionwizard.org/ using the AoI.
