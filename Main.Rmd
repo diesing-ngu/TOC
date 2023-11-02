@@ -47,7 +47,7 @@ dl <- 10
 
 ## Load required data
 
-If more than one sediment depth interval is predicted, it might be usefull to use the prediction of the uppermost layer as a predictor.
+If more than one sediment depth interval is predicted, it might be useful to use the prediction of the uppermost layer as a predictor.
 *Note: The name of the OC prediction of the sediment interval above needs to be added manually.*
 
 ```{r load_data}
