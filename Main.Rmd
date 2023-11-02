@@ -8,7 +8,6 @@ output: html_notebook
 ```{r packages, message=FALSE}
 rm(list=ls())
 
-library(raster)
 library(terra)
 library(dplyr)
 library(rcompanion)
@@ -48,13 +47,10 @@ dl <- 10
 
 ## Load required data
 
-The variable 'date' specifies the date when the files of the data preparation step were written to the disk.
-
+If more than one sediment depth interval is predicted, it might be usefull to use the prediction of the uppermost layer as a predictor.
 *Note: The name of the OC prediction of the sediment interval above needs to be added manually.*
 
 ```{r load_data}
-date <- "2023-07-20"
-
 predictors <- rast("input/predictors.tif")
 
 if(du != 0){
@@ -64,7 +60,7 @@ if(du != 0){
   rm(OCabove)
 } 
 
-OC <- read_sf(paste0("input/OC", du, "_", date, ".shp"))
+OC <- read_sf(paste0("input/OC", du, ".shp"))
 OC <- vect(OC)
 
 names(predictors)
