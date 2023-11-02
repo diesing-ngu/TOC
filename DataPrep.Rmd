@@ -16,7 +16,6 @@ library(sf)
 library(sdmpredictors)
 library(spatialEco)
 library(dplyr)
-library(stars)
 library(terra)
 ```
 
@@ -101,8 +100,6 @@ min_ext <- sum(predictors)
 min_ext[min_ext == 0] <- NA
 fishnet <- st_as_sf(stars::st_as_stars(min_ext), as_points = FALSE, merge = FALSE)
 fishnet$ID <- 1:nrow(fishnet)
-
-#write_sf(fishnet, dsn = "input", layer = "fishnet", driver = "ESRI Shapefile")
 ```
 
 
@@ -216,16 +213,16 @@ writeRaster(predictors, "input/predictors.tif", overwrite = TRUE)
 
 
 ```{r save_0-10cm}
-write_sf(OC0, dsn = "input", layer = paste0("OC0_", Sys.Date()), driver = "ESRI Shapefile")
+write_sf(OC0, dsn = "input", layer = "OC0", driver = "ESRI Shapefile")
 ```
 
 
 ```{r save_depth_intervals}
-#write_sf(OC0, dsn = "input", layer = paste0("OC0_", Sys.Date()), driver = "ESRI Shapefile")
-#write_sf(OC5, dsn = "input", layer = paste0("OC5_", Sys.Date()), driver = "ESRI Shapefile")
-#write_sf(OC15, dsn = "input", layer = paste0("OC15_", Sys.Date()), driver = "ESRI Shapefile")
-#write_sf(OC30, dsn = "input", layer = paste0("OC30_", Sys.Date()), driver = "ESRI Shapefile")
-#write_sf(OC60, dsn = "input", layer = paste0("OC60_", Sys.Date()), driver = "ESRI Shapefile")
+#write_sf(OC0, dsn = "input", layer = "OC0", driver = "ESRI Shapefile")
+#write_sf(OC5, dsn = "input", layer = "OC5", driver = "ESRI Shapefile")
+#write_sf(OC15, dsn = "input", layer = "OC15", driver = "ESRI Shapefile")
+#write_sf(OC30, dsn = "input", layer = "OC30", driver = "ESRI Shapefile")
+#write_sf(OC60, dsn = "input", layer = "OC60", driver = "ESRI Shapefile")
 ```
 
 
