@@ -207,17 +207,11 @@ OC0 <- st_centroid(OC_centroids)
 
 # Save files for use in main process
 
-```{r save_predictors}
+```{r save_files}
 writeRaster(predictors, "input/predictors.tif", overwrite = TRUE)
-```
-
-
-```{r save_0-10cm}
+writeVector(AoI, "input/AoI.shp")
 write_sf(OC0, dsn = "input", layer = "OC0", driver = "ESRI Shapefile")
-```
 
-
-```{r save_depth_intervals}
 #write_sf(OC0, dsn = "input", layer = "OC0", driver = "ESRI Shapefile")
 #write_sf(OC5, dsn = "input", layer = "OC5", driver = "ESRI Shapefile")
 #write_sf(OC15, dsn = "input", layer = "OC15", driver = "ESRI Shapefile")
