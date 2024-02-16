@@ -95,6 +95,8 @@ plot(predictors)
 
 ## Create a fishnet based on predictor raster
 
+A spatial polygons file is created. It consists of one square for every grid cell. It will be used later in the process to create centroids which hold the mean value of the sedimentation rate measurements.
+
 ```{r fishnet}
 min_ext <- sum(predictors)
 min_ext[min_ext == 0] <- NA
