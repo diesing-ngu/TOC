@@ -10,20 +10,13 @@ rm(list=ls())
 
 library(terra)
 library(dplyr)
-library(rcompanion)
-library(Boruta)
 library(caret)
-library(usdm)
-library(corrplot)
 library(ggplot2)
 library(sf)
 library(CAST)
 library(lwgeom)
 library(geosphere)
 library(quantregForest)
-library(blockCV)
-library(automap)
-library(gstat)
 library(doParallel)
 library(ModelMetrics)
 library(forcats)
@@ -52,6 +45,7 @@ If more than one sediment depth interval is predicted, it might be useful to use
 
 ```{r load_data}
 predictors <- rast("input/predictors.tif")
+AoI <- read_sf("input/AoI.shp")
 
 if(du != 0){
   OCabove <- rast(paste0("output/OC0-10cm_median_", date, ".tif"))
@@ -64,6 +58,16 @@ OC <- read_sf(paste0("input/OC", du, ".shp"))
 OC <- vect(OC)
 
 names(predictors)
+```
+
+
+## Type of response?
+
+Define which property is used as response data.
+
+```{r response_type}
+resp_type <- "TOC"
+resp_unit <- "weight-%"
 ```
 
 
@@ -80,8 +84,6 @@ plot(OC, pch = 20, col = "black", cex = 0.5, add = TRUE)
 
 ## Create a regression matrix
 
-A regression matrix is created. Note that observation depth (below the sediment-water interface) is also included as a predictor, but rather taken from the response data frame.
-
 ```{r regression matrix}
 rm_oc <- as.data.frame(OC)
 rm_oc <- rm_oc[-1]
@@ -91,110 +93,12 @@ summary(rm_oc)
 ```
 
 
-## Data exploration
+# Data exploration
 
-### OC content (weight-%)
+## Histogram
 
 ```{r hist_oc_content}
-hist(rm_oc$TOC_perc, breaks = 40, main = "", xlab = "OC content (weight-%)")
-```
-
-
-### Transformation
-
-The response data are transformed to approach a normal distribution. This is necessary for semivariogram fitting.
-
-Null hypothesis: The data are normally distributed. If p > 0.05, normality can be assumed.
-
-```{r transformation}
-if(nrow(rm_oc) > 5000) {
-  lambda <- transformTukey(sample(rm_oc$TOC_perc, 5000), plotit = TRUE, quiet = FALSE, returnLambda = TRUE)
-  } else {
-  lambda <- transformTukey(rm_oc$TOC_perc, plotit = TRUE, quiet = FALSE, returnLambda = TRUE)
-}
-```
-
-
-# Predictor variable pre-selection
-
-## Boruta algorithm
-
-```{r boruta}
-set.seed(42)
-B <- Boruta(rm_oc[[1]] ~ .,data=rm_oc[2:ncol(rm_oc)], pValue = 0.05,
-             maxRuns = 500)
-B
-par(mar=c(13,4,1,1), cex = 0.6)
-plot(B, las=2, colCode = c("greenyellow", "yellow2", "red3", "cadetblue"), xlab = "")
-```
-
-## De-correlation analysis
-
-To reduce redundancy in information, a de-correlation analysis is carried out. Of those predictor variables identified as important in the Boruta analysis, only those with a correlation coefficient below a set threshold are retained. However, a universally applicable threshold does not exist. Additionally, multicollinearity, i.e., collinearity between three or more variables, might exist in the data. Variance inflation factors (VIFs) are therefore additionally calculated to check for multicollinearity. As a rule of thumb, VIFs larger than 5 or 10 indicate a problematic amount of collinearity (James et al., 2017: pp. 101-102; doi: 10.1080/24754269.2021.1980261). According to Johnston et al. (2017; doi: 10.1007/s11135-017-0584-6) a VIF of 2.5 or greater is generally considered indicative of considerable collinearity.
-
-```{r de-corr, message=FALSE, warning=FALSE}
-th <- 1
-
-repeat{
- cor_result<- vifcor(rm_oc[rownames(subset(attStats(B), decision == "Confirmed"))], th = th,  maxobservations = nrow(rm_oc))
- if (max(cor_result@results[,2]) >= 2.5){
-   th <- th - 0.01
- } else {
-   break
- }
-}
-
-max(cor_result@results[,2])
-cor_result
-
-sel_preds <- cor_result@results$Variables
-seldata <- rm_oc[c("TOC_perc", sel_preds)]
-```
-
-
-##  Correlation plot
-
-```{r correlation_plot}
-corrplot.mixed(cor(rm_oc[sel_preds]), lower.col =  "black", tl.pos = "lt", number.cex = 0.6)
-```
-
-
-## Environmental space
-
-A visual check to what extent the samples cover the environmental space. This is useful as legacy data were used and no formal sampling design was applied in the analysis.
-
-* Blue: Samples
-
-* Grey: Environmental data (based on random subsample)
-
-```{r}
-smp <- as.data.frame(spatSample(x = predictors[[sel_preds]], size = nrow((rm_oc)), method = "random", na.rm = TRUE))
-
-
-for (i in sel_preds) {
-    
-  print(ggplot() +
-          geom_density(data = seldata, aes(x=seldata[,i]),colour="cornflowerblue",fill="cornflowerblue", alpha=0.1,linewidth=1) +
-          geom_density(data = smp, aes(x=smp[,i]), colour="grey",fill="grey", alpha=0.1, linewidth=1) +
-          scale_x_continuous(name = names(seldata[i])))
-        
-}
-```
-
-
-## 2D plots of environmental space
-
-```{r 2d_env_plots}
-
-for (i in sel_preds[2:length(sel_preds)]) {
-  
-  print(ggplot() +
-    geom_point(data = smp, aes(x=smp[,i], y=smp[,1]), colour="grey", alpha=1, size=2) +
-    geom_point(data = seldata, aes(x=seldata[,i], y=seldata[,2]),colour="cornflowerblue", alpha=1, size=2) +
-    scale_x_continuous(name = names(seldata[i])) +
-    ylab(sel_preds[1]) +
-    theme_bw())
-}
+hist(rm_oc$TOC_perc, breaks = 40, main = "", xlab = paste0(resp_type, " (", resp_unit, ")"))
 ```
 
 
@@ -202,10 +106,9 @@ for (i in sel_preds[2:length(sel_preds)]) {
 
 Distances in environmental (feature) space are computed.
 
-```{r env_space_dist}
+```{r env_space_dist, message=FALSE}
 dist_env <- plot_geodist(st_as_sf(OC), predictors,
                      type = "feature",
-                     variables = sel_preds,
                      showPlot = FALSE)
 
 dist_env$plot
@@ -230,125 +133,24 @@ dist_geogr$plot + scale_x_log10()
 
 # Quantile Regression Forest model
 
-## Quick RF model without spatial CV
-
-```{r quick_rf}
-set.seed(42)
-rf <- randomForest(TOC_perc ~ ., seldata, replace = FALSE)
-
-t <- data.frame(rf$pred, rf$y)
-
-validation <- data.frame(mse=numeric(), rmse=numeric(), r2=numeric())
-validation[1,1] <- round(mse(t$rf.y, t$rf.pred), 3)
-validation[1,2] <- round(rmse(t$rf.y, t$rf.pred), 3)
-validation[1,3] <- round(cor(t$rf.y, t$rf.pred)^2, 3)
-
-colnames(validation) <- c("MSE", "RMSE", "r2")
-rownames(validation) <- NULL
-validation
-
-ggplot(t, aes(x = rf.pred, y = rf.y)) +
-  geom_bin2d(bins = 60) +
-  geom_smooth(method = "lm") +
-  geom_abline(intercept = 0, slope = 1, colour = "grey", linewidth = 1.2) +
-  scale_fill_continuous(type = "viridis") +
-  theme_bw() +
-  scale_x_continuous(name = "Predicted value") +
-  scale_y_continuous(name = "Observed value") +
-  ggtitle("RF mean")
-
-imp <- varImp(rf, scale = FALSE)
-imp$Predictor <- rownames(imp)
-rownames(imp) <- NULL
-imp <- imp[order(imp[1], decreasing = TRUE), c(2, 1)]
-colnames(imp)[2] <- "IncMSE"
-
-impfig <- imp %>%
-  mutate(Predictor = fct_reorder(Predictor, IncMSE)) %>%
-  ggplot( aes(x=Predictor, y=IncMSE)) +
-    geom_bar(stat="identity", fill="#f68060", alpha=.6, width=.4) +
-    coord_flip() +
-    xlab("") +
-    ylab("% increase in MSE") +
-    theme_bw()
-    
-impfig
-```
-
-
-## Spatial autocorrelation range (SAR)
-
-### SAR based on observations
-
-The spatial dependence structure in the raw data is determined. Specifically, the distance (range) up to which observations are spatially autocorrelated is estimated with a variogram.
-
-*Data need to be in an equidistant projection and (approximately) normally distributed.*
-
-```{r spatial_autocorrelation_range_obs}
-OC_pr <- project(x = OC, y = "+proj=eqdc +lon_0=12.5 +lat_1=59.5 +lat_2=77.5 +lat_0=68.5 +datum=WGS84 +units=m +no_defs")
-OC_pr <- as(OC_pr, "Spatial")
-
-if (lambda >  0){
-  OC_pr$toc_perc = OC_pr$toc_perc ^ lambda
-} else if (lambda == 0){
-    OC_pr$toc_perc = log(OC_pr$toc_perc)
-} else if (lambda <  0){
-      OC_pr$toc_perc = -1 * OC_pr$toc_perc ^ lambda}
-
-# automap package
-vf <- autofitVariogram(toc_perc ~ 1, 
-                       OC_pr, 
-                       #cutoff = 5000000
-                       )
-plot(vf)
-sar <- vf$var_model$range[2]
-```
-
-
 ## Creating spatial blocks
 
-Spatial blocks and folds are created. The folds will be used in a spatial k-fold cross validation. The size of the blocks is determined by the spatial autocorrelation range.
+Spatial blocks and folds are created. The folds will be used in a spatial k-fold cross validation. The k-fold nearest neighbour distance matching algorithm is used here.
 
-Roberts et. al. (2017) suggest that blocks should be substantially bigger than the range of spatial autocorrelation (in model residual) to obtain realistic error estimates, while a buffer with the size of the spatial autocorrelation range would result in a good estimation of error.
-
-*Should we modify the block size? This could be gauged by looking at the geographic distances plot below. The block size might be right, when sample-to-prediction and CV distances look similar.*
-
-```{r spatial_blocks}
+```{r nndm}
 k <- 10 # Number of folds
-m <- 0.3 # Multiplier applied to block size
-
-spBlocks <- cv_spatial(x = OC_pr,
-                       k = k,
-                       #hexagon = FALSE,
-                       size = sar * m,
-                       seed = 42,
-                       progress = FALSE)
-```
-
-
-## Reshaping index
-
-The output from the blocking step needs to be reshaped.
-
-```{r reshape_index}
-index_train <- list()
-index_val <- list()
-for (n in 1:spBlocks$k) {
-  ft <- spBlocks[["folds_list"]][[n]][[-2]]
-  fv <- spBlocks[["folds_list"]][[n]][[2]]
-  index_train[[length(index_train)+1]] <- ft
-  index_val[[length(index_val)+1]] <- fv
-}
+knndmfolds <- knndm(tpoints = st_as_sf(OC),
+                    modeldomain = AoI,
+                    k = k,
+                    samplesize = 2000)
 ```
 
 
 ## Distances in geographic space including CV distances
 
-This plot might be used to gauge whether block sizes are right. This should be the case when CV-distances are similar to sample-to-prediction distances.
-
 ```{r geogr_space_dist2, message=FALSE}
 dist_geogr2 <- plot_geodist(st_as_sf(OC), predictors,
-                     cvfolds= index_val,
+                     cvfolds= knndmfolds$indx_test,
                      type = "geo",
                      unit="km",
                      showPlot = FALSE)
@@ -360,14 +162,12 @@ dist_geogr2$plot + scale_x_log10()
 
 ## Model tuning
 
-A Quantile Regression Forest model is tuned. Predictor variables are finally selected in a forward feature selection approach and various values of the mtry parameter are tested in a spatial k-fold cross validation.
+A Quantile Regression Forest model is tuned. Predictor variables are selected in a forward feature selection approach and various values of the mtry parameter are tested in a spatial k-fold cross validation.
 
-This step is time-consuming and memory-heavy. Therefore, only a subset of possible mtry values is tested. 
-
-The maximum number of iterations can be calculated upfront, based on the number of pre-selected predictors:
+The maximum number of iterations to be performed can be calculated upfront, based on the number of pre-selected predictors:
 
 ```{r max_iter}
-factorial(length(sel_preds))/(factorial(2)*factorial(length(sel_preds)-2)) + sum(c((length(sel_preds)-2):1))
+factorial(length(names(predictors)))/(factorial(2)*factorial(length(names(predictors))-2)) + sum(c((length(names(predictors))-2):1))
 ```
 
 
@@ -382,8 +182,8 @@ registerDoParallel(cl)
 
 set.seed(42)
 
-model <- ffs(seldata[sel_preds],
-               seldata$TOC_perc,
+model <- ffs(rm_oc[names(predictors)],
+               rm_oc$TOC_perc,
                metric = "Rsquared",
                method="qrf",
                what = 0.5,
@@ -392,7 +192,7 @@ model <- ffs(seldata[sel_preds],
                trControl = trainControl(method="CV",
                                         number = k,
                                         savePredictions = "final",
-                                        index = index_train, 
+                                        index = knndmfolds$indx_train, 
                                         allowParallel = TRUE),
                verbose = TRUE)
 
@@ -423,11 +223,11 @@ Note that these are the statistics based on the predicted values of the selected
 t <- data.frame(model$pred$pred, model$pred$obs)
 
 validation <- data.frame(mse=numeric(), rmse=numeric(), r2=numeric())
-validation[1,1] <- round(mse(t$model.pred.obs, t$model.pred.pred), 3)
+validation[1,1] <- round(sum(t$model.pred.obs - t$model.pred.pred)/nrow(t), 3)
 validation[1,2] <- round(rmse(t$model.pred.obs, t$model.pred.pred), 3)
 validation[1,3] <- round(cor(t$model.pred.obs, t$model.pred.pred)^2, 3)
 
-colnames(validation) <- c("MSE", "RMSE", "r2")
+colnames(validation) <- c("ME", "RMSE", "r2")
 rownames(validation) <- NULL
 validation
 ```
@@ -437,20 +237,19 @@ validation
 
 ```{r validation_plot, message=FALSE}
 ggplot(t, aes(x = model.pred.pred, y = model.pred.obs)) +
-  geom_bin_2d(bins = 60) +
+  geom_point() +
   geom_smooth(method = "lm") +
   geom_abline(intercept = 0, slope = 1, colour = "grey", linewidth = 1.2) +
-  scale_fill_continuous(type = "viridis") +
   theme_bw() +
   scale_x_continuous(name = "Predicted value") +
   scale_y_continuous(name = "Observed value") +
-  ggtitle("QRF median")
+  ggtitle(paste0(resp_type, " (", resp_unit, ")"))
 ```
 
 
 ## Variable importance
 
-```{r variable_importance_plot}
+```{r variable_importance_plot, warning=FALSE}
 imp <- varImp(model$finalModel, scale = FALSE)
 imp$Predictor <- rownames(imp)
 rownames(imp) <- NULL
@@ -473,11 +272,10 @@ impfig
 
 ## Distances in environmental space including CV distances
 
-
 ```{r env_space_dist2, message=FALSE}
 dist_env2 <- plot_geodist(st_as_sf(OC), predictors,
                      type = "feature",
-                     cvfolds= index_val,
+                     cvfolds= knndmfolds$indx_test,
                      variables = sel_preds,
                      showPlot = FALSE)
 
@@ -495,7 +293,7 @@ m2 <- model$finalModel
 class(m2) <- "randomForest"
 
 for (i in 1:length(sel_preds)) {
-  partialPlot(x = m2, pred.data = seldata, x.var = sel_preds[i], main = "", xlab = sel_preds[i], ylab = "TOC content (%)")
+  partialPlot(x = m2, pred.data = rm_oc, x.var = sel_preds[i], main = "", xlab = sel_preds[i], ylab = paste0(resp_type, " (", resp_unit, ")"))
 }
 
 ```
@@ -508,12 +306,14 @@ for (i in 1:length(sel_preds)) {
 Organic carbon content is predicted. Median values of the QRF distribution are calculated as central values. The 90% prediction interval and the prediction interval ratio are calculated as measures of uncertainty.
 
 ```{r predict_oc}
-preds <- stack(predictors[[sel_preds]])
+preds <- raster::stack(predictors[[sel_preds]])
 OC_med <- predict(preds, model$finalModel, what = 0.5)
 OC_p95 <- predict(preds, model$finalModel, what = 0.95)
 OC_p5 <- predict(preds, model$finalModel, what = 0.05)
 OC_pi90 <- OC_p95 - OC_p5
 OC_pir <- OC_pi90 / OC_med
+
+hist(OC_med, breaks = 20, main = "", xlab = paste0(resp_type, " (", resp_unit, ")"))
 ```
 
 
@@ -531,9 +331,6 @@ OC_aoa <- aoa(newdata = predictors,
 )
 
 plot(OC_aoa)
-
-fr <- freq(OC_aoa$AOA)
-print(paste0("AOA = ", round(100*fr$count[2]/ sum(fr$count),2), "% of pixels"))
 ```
 
 
@@ -545,6 +342,9 @@ plot(OC_pi90, main = "90% prediction interval")
 plot(OC_pir, main = "Prediction interval ratio")
 plot(OC_aoa$DI, main = "Dissimilarity index")
 plot(OC_aoa$AOA, main = "Area of applicability")
+
+fr <- freq(OC_aoa$AOA)
+print(paste0("AOA = ", round(100*fr$count[2]/ sum(fr$count),2), "% of pixels"))
 ```
 
 
@@ -579,7 +379,7 @@ print("Selected Predictors")
 sel_preds
 model
 print("Final Model")
-paste0("MSE = ", validation[1,1])
+paste0("ME = ", validation[1,1])
 paste0("RMSE = ", validation[1,2])
 paste0("R2 = ", validation[1,3])
 paste0("AOA = ", round(100*fr$count[2]/ sum(fr$count),2), "% of pixels")
