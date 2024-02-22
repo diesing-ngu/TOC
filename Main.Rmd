@@ -250,7 +250,7 @@ ggplot(t, aes(x = model.pred.pred, y = model.pred.obs)) +
 ## Variable importance
 
 ```{r variable_importance_plot, warning=FALSE}
-imp <- varImp(model$finalModel, scale = FALSE)
+imp <- varImp(model$finalModel)
 imp$Predictor <- rownames(imp)
 rownames(imp) <- NULL
 imp <- imp[order(imp[1], decreasing = TRUE), c(2, 1)]
@@ -260,13 +260,18 @@ imp
 impfig <- imp %>%
   mutate(Predictor = fct_reorder(Predictor, IncMSE)) %>%
   ggplot( aes(x=Predictor, y=IncMSE)) +
-    geom_bar(stat="identity", fill="#f68060", alpha=.6, width=.4) +
-    coord_flip() +
-    xlab("") +
-    ylab("% increase in MSE") +
-    theme_bw()
+  geom_bar(stat="identity", fill="#f68060", alpha=.6, width=.4) +
+  coord_flip() +
+  xlab("") +
+  ylab("% increase in MSE") +
+  ggtitle("Organic carbon content") +
+  theme_bw()
     
 impfig
+
+jpeg(filename = "output/TOC_VarImp.jpg", width = 12, height = 12, units = "cm", res = 500)
+impfig
+dev.off()
 ```
 
 
