@@ -301,6 +301,12 @@ for (i in 1:length(sel_preds)) {
   partialPlot(x = m2, pred.data = rm_oc, x.var = sel_preds[i], main = "", xlab = sel_preds[i], ylab = paste0(resp_type, " (", resp_unit, ")"))
 }
 
+for (i in 1:length(sel_preds)) {
+  jpeg(filename = paste0("output/", sel_preds[i], ".jpg"), width = 12, height = 12, units = "cm", res = 500)
+  par(mar = c(4.5,5,1,1))
+  partialPlot(x = m2, pred.data = rm_oc, x.var = sel_preds[i], ylim=c(0.8,1.75), main = "", xlab = sel_preds[i], ylab = "Organic carbon content (weight-%)")
+  dev.off()
+}
 ```
 
 
