@@ -373,8 +373,8 @@ write_sf(st_as_sf(aoa_poly), dsn = "output", layer = paste0("OC", du, "-", dl, "
 
 ```{r export_results}
 writeRaster(OC_med, paste0("output/OC", du, "-", dl, "cm_median_", Sys.Date(), ".tif"))
-#writeRaster(OC_p5, paste0("output/OC", du, "-", dl, "cm_P5_", Sys.Date(), ".tif"))
-#writeRaster(OC_p95, paste0("output/OC", du, "-", dl, "cm_P95_", Sys.Date(), ".tif"))
+writeRaster(OC_p5, paste0("output/OC", du, "-", dl, "cm_P5_", Sys.Date(), ".tif"))
+writeRaster(OC_p95, paste0("output/OC", du, "-", dl, "cm_P95_", Sys.Date(), ".tif"))
 writeRaster(OC_pi90, paste0("output/OC", du, "-", dl, "cm_PI90_", Sys.Date(), ".tif"))
 writeRaster(OC_pir, paste0("output/OC", du, "-", dl, "cm_PIR_", Sys.Date(), ".tif"))
 #writeRaster(OC_aoa$DI, paste0("output/OC", du, "-", dl, "cm__DI_", Sys.Date(), ".tif"))
